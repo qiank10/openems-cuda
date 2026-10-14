@@ -15,6 +15,15 @@ cmake_minimum_required(VERSION 3.1...3.10)
 PROJECT(openEMS CXX C)
 
 option(OPENEMS_ENABLE_CUDA "Build the native NVIDIA CUDA FDTD engine" OFF)
+option(OPENEMS_ENABLE_METAL "Build the Apple Metal FDTD engine" OFF)
+if(OPENEMS_ENABLE_METAL)
+ if(NOT APPLE)
+  message(FATAL_ERROR "Metal is macOS only")
+ endif()
+ enable_language(OBJCXX)
+ find_library(METAL_FRAMEWORK Metal REQUIRED)
+ find_library(FOUNDATION_FRAMEWORK Foundation REQUIRED)
+endif()
 if (OPENEMS_ENABLE_CUDA)
 	if (CMAKE_VERSION VERSION_LESS 3.18)
 		message(FATAL_ERROR "OPENEMS_ENABLE_CUDA requires CMake 3.18 or newer")
@@ -194,6 +203,13 @@ if (OPENEMS_BUILD_TESTS)
 		NAME numeric_phase_velocity_anisotropic_grid
 		COMMAND openems_test_numeric_phase_velocity
 	)
+	add_executable(openems_test_host_extension_dispatch
+		FDTD/tests/test_host_extension_dispatch.cpp
+	)
+	target_include_directories(openems_test_host_extension_dispatch PRIVATE
+		${openEMS_SOURCE_DIR}
+	)
+	add_test(NAME host_extension_dispatch COMMAND openems_test_host_extension_dispatch)
 endif()
 
 INCLUDE_DIRECTORIES( ${openEMS_SOURCE_DIR} )    #find tools
@@ -220,6 +236,11 @@ TARGET_LINK_LIBRARIES( openEMS
   ${MPI_LIBRARIES}
 )
 
+if (OPENEMS_ENABLE_METAL)
+ target_compile_definitions(openEMS PRIVATE OPENEMS_ENABLE_METAL)
+ target_link_libraries(openEMS ${METAL_FRAMEWORK} ${FOUNDATION_FRAMEWORK})
+ set_source_files_properties(FDTD/engine_metal.mm PROPERTIES COMPILE_FLAGS "-fobjc-arc")
+endif()
 if (OPENEMS_ENABLE_CUDA)
 	target_compile_definitions(openEMS PRIVATE OPENEMS_ENABLE_CUDA)
 	target_link_libraries(openEMS CUDA::cudart)
